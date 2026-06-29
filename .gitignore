@@ -1,0 +1,11 @@
+# Java/Maven build output
+**/target/
+
+# IDE/system files
+.DS_Store
+.idea/
+.vscode/
+
+# Logs/temp
+*.log
+/tmp/
