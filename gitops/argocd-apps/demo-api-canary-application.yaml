@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: demo-api-canary
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:liang12431/gitops.git
+    targetRevision: HEAD
+    path: gitops/applications/demo-api-canary
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+

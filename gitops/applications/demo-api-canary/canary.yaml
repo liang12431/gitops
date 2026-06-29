@@ -1,0 +1,26 @@
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: demo-api
+  namespace: demo
+spec:
+  provider: istio
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: demo-api
+  progressDeadlineSeconds: 600
+  service:
+    port: 8080
+    match:
+      - uri:
+          prefix: /
+  analysis:
+    interval: 30s
+    threshold: 1
+    iterations: 1
+    match:
+      - headers:
+          x-canary:
+            exact: "true"
+
