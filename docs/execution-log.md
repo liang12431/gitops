@@ -405,3 +405,61 @@ Service/demo-api
 Deployment/demo-api
 Ingress/demo-api
 ```
+
+### 11. Istio 安装和访问验证成功
+
+执行命令：
+
+```bash
+./scripts/06-install-istio.sh
+```
+
+安装组件：
+
+```text
+istio-base
+istiod
+istio-ingressgateway
+```
+
+本地处理：
+
+```text
+istio-ingressgateway 使用 NodePort，避免和 ingress-nginx 的 LoadBalancer 80/443 冲突。
+```
+
+验证命令：
+
+```bash
+kubectl -n istio-system get svc istio-ingressgateway
+kubectl -n demo get gateway,virtualservice
+NODE_PORT=$(kubectl -n istio-system get svc istio-ingressgateway -o jsonpath='{.spec.ports[?(@.port==80)].nodePort}')
+curl -H "Host: demo-istio.local" "http://127.0.0.1:${NODE_PORT}/version"
+```
+
+结果：
+
+```json
+{"app":"app-a","version":"v1"}
+```
+
+注意事项：
+
+```text
+kubectl -n demo get pod -o jsonpath='{.spec.containers[*].name}'
+```
+
+只显示 `app`，但 Pod annotation 里有：
+
+```text
+sidecar.istio.io/status
+```
+
+并且 `.spec.initContainers` 里出现：
+
+```text
+istio-init
+istio-proxy
+```
+
+这是当前 Istio/Kubernetes 组合下使用 restartable init container 形式注入 sidecar 的表现，不是没有注入。
