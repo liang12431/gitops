@@ -347,3 +347,26 @@ Grafana 登录：
 ```text
 admin / admin
 ```
+
+### 9. ArgoCD Helm repo update 遇到无关 Istio repo 网络问题
+
+执行命令：
+
+```bash
+./scripts/05-install-argocd.sh
+```
+
+遇到的问题：
+
+```text
+helm repo update 会更新所有 repo。
+已有 istio repo https://istio-release.storage.googleapis.com/charts 出现 connection reset by peer。
+导致 ArgoCD 安装脚本提前失败。
+```
+
+解决方案：
+
+```text
+把脚本里的 helm repo update 改成只更新 argo repo：
+helm repo update argo
+```

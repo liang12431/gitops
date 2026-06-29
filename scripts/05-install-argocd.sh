@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 helm repo add argo https://argoproj.github.io/argo-helm
-helm repo update
+helm repo update argo
 
 helm upgrade --install argocd argo/argo-cd \
   --namespace argocd \
@@ -31,4 +31,3 @@ Initial admin password:
 Application:
   demo-api
 MSG
-
