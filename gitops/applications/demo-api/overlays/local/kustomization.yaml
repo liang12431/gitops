@@ -6,4 +6,4 @@ resources:
   - ingress.yaml
 images:
   - name: localhost:5001/demo/app-a
-    newTag: 0.1.0
+    newTag: 0.1.1

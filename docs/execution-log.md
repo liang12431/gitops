@@ -251,3 +251,99 @@ service/demo-api ClusterIP 8080
 ingress/demo-api host demo.local
 ingress-nginx-controller LoadBalancer 192.168.139.2
 ```
+
+### 7. Observability kustomize namespace 路径问题
+
+执行命令：
+
+```bash
+./scripts/04-install-observability.sh
+```
+
+遇到的问题：
+
+```text
+gitops/platform/observability/kustomization.yaml 引用了 ../namespaces/observability.yaml。
+kubectl kustomize 因 load restrictor 拒绝读取上层目录文件。
+```
+
+解决方案：
+
+```text
+和 demo namespace 一样，namespace 单独 apply：
+kubectl apply -f gitops/platform/namespaces/observability.yaml
+
+observability kustomization 只保留 OTel Collector、Prometheus、Grafana 组件。
+```
+
+### 8. Observability 安装和验证成功
+
+执行命令：
+
+```bash
+./scripts/01-build-push-images.sh
+./scripts/04-install-observability.sh
+kubectl apply -k gitops/applications/demo-api/overlays/local
+kubectl -n demo rollout status deployment/demo-api --timeout=240s
+./scripts/03-smoke-nginx.sh
+```
+
+安装组件：
+
+```text
+OpenTelemetry Collector
+Prometheus
+Grafana
+```
+
+验证 Prometheus targets：
+
+```bash
+kubectl -n observability port-forward svc/prometheus 19090:9090
+curl -s 'http://127.0.0.1:19090/api/v1/targets' | jq
+```
+
+结果：
+
+```text
+demo-api-actuator = up
+otel-collector = up
+```
+
+验证 Prometheus 查询：
+
+```bash
+curl -s --get 'http://127.0.0.1:19090/api/v1/query' \
+  --data-urlencode 'query=up{job="demo-api-actuator"}'
+```
+
+结果：
+
+```text
+up{job="demo-api-actuator"} = 1
+```
+
+验证 OTLP：
+
+```bash
+kubectl -n observability logs deploy/otel-collector --tail=30
+```
+
+结果：
+
+```text
+OTel Collector debug exporter 已收到 TracesExporter spans。
+```
+
+访问方式：
+
+```bash
+kubectl -n observability port-forward svc/prometheus 9090:9090
+kubectl -n observability port-forward svc/grafana 3000:3000
+```
+
+Grafana 登录：
+
+```text
+admin / admin
+```

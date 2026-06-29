@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REGISTRY="${REGISTRY:-localhost:5001}"
+VERSION="${VERSION:-0.1.1}"
 
 if ! docker ps --format '{{.Names}}' | grep -qx local-registry; then
   if docker ps -a --format '{{.Names}}' | grep -qx local-registry; then
@@ -21,10 +22,10 @@ fi
   mvn -q -DskipTests package
 )
 
-docker build -t "$REGISTRY/demo/app-a:0.1.0" "$ROOT/apps/app-a"
-docker build -t "$REGISTRY/demo/app-b:0.1.0" "$ROOT/apps/app-b"
+docker build -t "$REGISTRY/demo/app-a:$VERSION" "$ROOT/apps/app-a"
+docker build -t "$REGISTRY/demo/app-b:$VERSION" "$ROOT/apps/app-b"
 
-docker push "$REGISTRY/demo/app-a:0.1.0"
-docker push "$REGISTRY/demo/app-b:0.1.0"
+docker push "$REGISTRY/demo/app-a:$VERSION"
+docker push "$REGISTRY/demo/app-b:$VERSION"
 
-echo "Images pushed to $REGISTRY"
+echo "Images pushed to $REGISTRY with tag $VERSION"

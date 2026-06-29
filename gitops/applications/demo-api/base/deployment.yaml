@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: localhost:5001/demo/app-a:0.1.0
+          image: localhost:5001/demo/app-a:0.1.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -26,6 +26,10 @@ spec:
               value: demo-api
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://otel-collector.observability:4317
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: http://otel-collector.observability:4318/v1/traces
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: http://otel-collector.observability:4318/v1/metrics
             - name: OTEL_TRACES_EXPORTER
               value: otlp
             - name: OTEL_METRICS_EXPORTER
@@ -51,4 +55,3 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
-
