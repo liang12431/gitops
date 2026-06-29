@@ -370,3 +370,38 @@ helm repo update 会更新所有 repo。
 把脚本里的 helm repo update 改成只更新 argo repo：
 helm repo update argo
 ```
+
+### 10. ArgoCD 安装和同步验证成功
+
+执行命令：
+
+```bash
+./scripts/05-install-argocd.sh
+```
+
+第一次下载 chart 时遇到 GitHub release timeout，重试后成功。
+
+验证命令：
+
+```bash
+kubectl -n argocd get pods
+kubectl -n argocd describe application demo-api
+```
+
+结果：
+
+```text
+argocd-server Ready
+argocd-repo-server Ready
+argocd-application-controller Ready
+Application demo-api Sync=Synced Health=Healthy
+Revision=08c9d5d3814b6dd5ee2a494b4d8cef641c8effea
+```
+
+ArgoCD 已经接管：
+
+```text
+Service/demo-api
+Deployment/demo-api
+Ingress/demo-api
+```
