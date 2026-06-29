@@ -18,3 +18,12 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: demo-api
+      namespace: demo
+      jsonPointers:
+        - /spec/selector
+        - /spec/ports

@@ -589,4 +589,278 @@ POST /gate/promotion/open
 POST /gate/rollback/open
 这样可以用 wget --post-data '' 触发 gate。
 ```
+
+执行成功后的验证：
+
+```bash
+./scripts/01-build-push-images.sh
+kubectl apply -k gitops/platform/gate-service
+kubectl -n demo rollout status deployment/gate-service --timeout=300s
+kubectl -n demo exec deploy/gate-service -- wget -qO- http://127.0.0.1:8080/
+```
+
+结果：
+
+```text
+gate-service
+```
+
+### 15. ArgoCD 在 Pod 内访问 GitHub EOF
+
+执行 ArgoCD hard refresh 后，两个 Application 一直是：
+
+```text
+Sync = Unknown
+Health = Healthy
+```
+
+ArgoCD repo-server 报错：
+
+```text
+failed to list refs:
+Get "https://github.com/liang12431/gitops.git/info/refs?service=git-upload-pack": EOF
+```
+
+诊断命令：
+
+```bash
+curl -I --max-time 20 \
+  'https://github.com/liang12431/gitops.git/info/refs?service=git-upload-pack'
+
+kubectl -n demo exec deploy/gate-service -- \
+  wget -S -O- --timeout=20 \
+  'https://github.com/liang12431/gitops.git/info/refs?service=git-upload-pack'
+
+kubectl -n argocd logs deploy/argocd-repo-server --tail=80
+```
+
+结论：
+
+```text
+宿主机可以访问 GitHub。
+Kubernetes Pod 内访问 GitHub TLS 被 reset。
+所以这不是 GitOps YAML 错误，而是本地 OrbStack/K8s Pod 到 GitHub 的网络问题。
+```
+
+本地解决方案：
+
+```text
+GitHub 仍然作为远端代码仓库。
+为了让 ArgoCD 在本地实验继续跑通，宿主机启动一个只读 git daemon mirror。
+ArgoCD Application 临时改用：
+git://host.orb.internal/local-gitops-lab-bare.git
+```
+
+执行命令：
+
+```bash
+./scripts/09-use-local-git-mirror.sh
+```
+
+结果：
+
+```text
+demo-api          git://host.orb.internal/local-gitops-lab-bare.git   Synced
+demo-api-canary   git://host.orb.internal/local-gitops-lab-bare.git   Synced
+```
+
+注意：
+
+```text
+每次本地 commit 后，如果希望 ArgoCD 从本地 mirror 看到最新内容，需要再次执行：
+./scripts/09-use-local-git-mirror.sh
+```
+
+### 16. 恢复 primary 到 app-a
+
+由于第一次自动 promotion 已经把 primary 提升到了 app-b，所以先把 GitOps 目标镜像恢复为 app-a。
+
+然后打开 promotion gate：
+
+```bash
+kubectl -n demo exec deploy/gate-service -- \
+  wget -qO- --post-data '' http://127.0.0.1:8080/gate/promotion/open
+```
+
+等待 Flagger：
+
+```bash
+kubectl -n demo get canary demo-api -o wide
+kubectl -n demo get deploy demo-api demo-api-primary \
+  -o custom-columns=NAME:.metadata.name,IMAGE:.spec.template.spec.containers[0].image,READY:.status.readyReplicas
+```
+
+结果：
+
+```text
+demo-api phase = Succeeded
+demo-api-primary image = localhost:5001/demo/app-a:0.1.1
+```
+
+请求验证：
+
+```bash
+PORT=$(kubectl -n istio-system get svc istio-ingressgateway \
+  -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+
+curl -s -H 'Host: demo-istio.local' http://127.0.0.1:${PORT}/version
+curl -s -H 'Host: demo-istio.local' -H 'x-canary: true' http://127.0.0.1:${PORT}/version
+```
+
+结果：
+
+```json
+{"app":"app-a","version":"v1"}
+{"app":"app-a","version":"v1"}
+```
+
+### 17. 最终 header 灰度：普通请求 app-a，带 header 请求 app-b
+
+修改 GitOps：
+
+```yaml
+images:
+  - name: localhost:5001/demo/app-a
+    newName: localhost:5001/demo/app-b
+    newTag: 0.1.1
+```
+
+提交并推送：
+
+```bash
+git add gitops/applications/demo-api/overlays/local/kustomization.yaml
+git commit -m "Support local promotion gate commands"
+git push origin main
+./scripts/09-use-local-git-mirror.sh
+```
+
+ArgoCD 同步后：
+
+```text
+deployment/demo-api         = localhost:5001/demo/app-b:0.1.1
+deployment/demo-api-primary = localhost:5001/demo/app-a:0.1.1
+```
+
+等待 Flagger：
+
+```bash
+kubectl -n demo get canary demo-api -o wide
+kubectl -n demo describe canary demo-api
+```
+
+结果：
+
+```text
+demo-api phase = WaitingPromotion
+Halt demo-api.demo advancement waiting for promotion approval check promotion confirmation status
+```
+
+此时没有打开 promotion gate，因此 Flagger 停在 WaitingPromotion。
+
+请求验证：
+
+```bash
+curl -s -H 'Host: demo-istio.local' http://127.0.0.1:${PORT}/version
+curl -s -H 'Host: demo-istio.local' -H 'x-canary: true' http://127.0.0.1:${PORT}/version
+```
+
+结果：
+
+```json
+{"app":"app-a","version":"v1"}
+{"app":"app-b","version":"v2"}
+```
+
+这说明：
+
+```text
+普通请求 -> Istio Gateway -> VirtualService -> demo-api-primary -> app-a
+带 x-canary:true 请求 -> Istio Gateway -> VirtualService header match -> demo-api-canary -> app-b
+Flagger 负责生成/更新 VirtualService 和 DestinationRule。
+Istio/Envoy 负责真正按请求头转发流量。
+```
+
+### 18. ArgoCD 与 Flagger 同时管理 Service 的 diff
+
+最终等待 promotion 时，ArgoCD `demo-api` 曾显示：
+
+```text
+demo-api OutOfSync
+```
+
+检查资源后发现只有：
+
+```text
+Service/demo-api sync=OutOfSync
+```
+
+原因：
+
+```text
+最初 NGINX baseline 阶段，Service/demo-api 由 demo-api Application 创建。
+安装 Flagger 后，Flagger 会接管 Service/demo-api。
+Flagger 把 selector 改成 app=demo-api-primary。
+Flagger 把 targetPort 从命名端口 http 解析成 8080。
+因此 live Service 和 GitOps 里最初的 Service manifest 有 diff。
+```
+
+修复：
+
+```yaml
+spec:
+  syncPolicy:
+    syncOptions:
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    - group: ""
+      kind: Service
+      name: demo-api
+      namespace: demo
+      jsonPointers:
+        - /spec/selector
+        - /spec/ports
+```
+
+执行 live patch：
+
+```bash
+kubectl -n argocd patch application demo-api --type merge -p '{
+  "spec": {
+    "syncPolicy": {
+      "syncOptions": [
+        "CreateNamespace=true",
+        "RespectIgnoreDifferences=true"
+      ]
+    },
+    "ignoreDifferences": [
+      {
+        "group": "",
+        "kind": "Service",
+        "name": "demo-api",
+        "namespace": "demo",
+        "jsonPointers": [
+          "/spec/selector",
+          "/spec/ports"
+        ]
+      }
+    ]
+  }
+}'
+```
+
+结果：
+
+```text
+demo-api Synced Healthy
+Service/demo-api sync=Synced
+Deployment/demo-api sync=Synced
+Ingress/demo-api sync=Synced
+```
+
+如果后续要把 app-b 提升为 primary：
+
+```bash
+kubectl -n demo exec deploy/gate-service -- \
+  wget -qO- --post-data '' http://127.0.0.1:8080/gate/promotion/open
+```
 ```
