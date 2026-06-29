@@ -27,3 +27,10 @@ spec:
       - headers:
           x-canary:
             exact: "true"
+    webhooks:
+      - name: check promotion confirmation status
+        type: confirm-promotion
+        url: http://gate-service.demo:8080/gate/promotion/check
+      - name: check rollback confirmation status
+        type: rollback
+        url: http://gate-service.demo:8080/gate/rollback/check

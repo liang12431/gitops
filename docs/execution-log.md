@@ -520,4 +520,69 @@ destinationrule/demo-api-canary
 ```text
 之前手动创建的 VirtualService/demo-api 只是 Istio baseline 测试用。
 安装 Flagger 后已删除，后续由 Flagger 接管 demo-api 的 VirtualService。
+
+### 13. 第一次 app-a -> app-b 灰度自动完成
+
+执行操作：
+
+```text
+GitOps 中把 demo-api 镜像从 app-a:0.1.1 改为 app-b:0.1.1。
+ArgoCD 同步 Deployment。
+Flagger 检测到新版本并启动 canary。
+```
+
+观察结果：
+
+```text
+demo-api Deployment = app-b:0.1.1
+demo-api-primary Deployment = app-a:0.1.1
+Canary phase 从 Initialized -> Progressing -> Promoting -> Finalising -> Succeeded
+```
+
+问题：
+
+```text
+当前 canary.yaml 没有 confirm-promotion webhook gate。
+iterations=1，Flagger 很快自动 promotion。
+最终 primary 也变成 app-b。
+```
+
+现象：
+
+```text
+普通请求和 x-canary:true 请求最终都返回 app-b。
+```
+
+结论：
+
+```text
+如果要稳定演示“普通请求 app-a，带 header 请求 app-b”，需要加入 promotion gate，
+让 Flagger 停在 WaitingPromotion，而不是立刻把 app-b 提升为 primary。
+```
+
+### 14. gate-service 镜像拉取问题
+
+执行命令：
+
+```bash
+./scripts/08-install-gate-service.sh
+```
+
+遇到的问题：
+
+```text
+gate-service 初版使用 python:3.12-alpine。
+Pod 卡在 ImagePullBackOff。
+事件显示 Docker Hub EOF。
+```
+
+解决方案：
+
+```text
+不用外部 Python 镜像。
+改成本地 Java HTTP server。
+使用本地 javac/jar 构建 gate-service.jar。
+使用已经验证可拉取的 amazoncorretto:21-alpine 作为运行镜像。
+推送到 localhost:5001/demo/gate-service:0.1.0。
+```
 ```

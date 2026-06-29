@@ -21,11 +21,19 @@ fi
   cd "$ROOT/apps/app-b"
   mvn -q -DskipTests package
 )
+(
+  cd "$ROOT/apps/gate-service"
+  mkdir -p target/classes
+  javac -d target/classes src/GateService.java
+  jar --create --file target/gate-service.jar --main-class GateService -C target/classes .
+)
 
 docker build -t "$REGISTRY/demo/app-a:$VERSION" "$ROOT/apps/app-a"
 docker build -t "$REGISTRY/demo/app-b:$VERSION" "$ROOT/apps/app-b"
+docker build -t "$REGISTRY/demo/gate-service:0.1.0" "$ROOT/apps/gate-service"
 
 docker push "$REGISTRY/demo/app-a:$VERSION"
 docker push "$REGISTRY/demo/app-b:$VERSION"
+docker push "$REGISTRY/demo/gate-service:0.1.0"
 
 echo "Images pushed to $REGISTRY with tag $VERSION"
