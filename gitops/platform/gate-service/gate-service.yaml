@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: gate-service
-          image: localhost:5001/demo/gate-service:0.1.0
+          image: localhost:5001/demo/gate-service:0.1.1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

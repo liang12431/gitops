@@ -26,7 +26,7 @@ public class GateService {
             return;
         }
 
-        if ("PUT".equals(method) && path.endsWith("/open")) {
+        if (("PUT".equals(method) || "POST".equals(method)) && path.endsWith("/open")) {
             OPEN_GATES.add(gate);
             respond(exchange, 200, "opened " + gate);
             return;
@@ -66,4 +66,3 @@ public class GateService {
         exchange.close();
     }
 }
-

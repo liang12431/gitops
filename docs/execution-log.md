@@ -583,6 +583,10 @@ Pod 卡在 ImagePullBackOff。
 改成本地 Java HTTP server。
 使用本地 javac/jar 构建 gate-service.jar。
 使用已经验证可拉取的 amazoncorretto:21-alpine 作为运行镜像。
-推送到 localhost:5001/demo/gate-service:0.1.0。
+推送到 localhost:5001/demo/gate-service:0.1.1。
+额外注意：Pod 内 BusyBox wget 不支持 --method=PUT，因此 gate-service 同时支持：
+POST /gate/promotion/open
+POST /gate/rollback/open
+这样可以用 wget --post-data '' 触发 gate。
 ```
 ```

@@ -11,9 +11,8 @@ cat <<'MSG'
 Gate service installed.
 
 Open promotion:
-  kubectl -n demo exec deploy/gate-service -- wget -qO- --method=PUT http://127.0.0.1:8080/gate/promotion/open
+  kubectl -n demo exec deploy/gate-service -- wget -qO- --post-data '' http://127.0.0.1:8080/gate/promotion/open
 
 Check promotion:
-  kubectl -n demo exec deploy/gate-service -- wget -qO- --method=POST http://127.0.0.1:8080/gate/promotion/check
+  kubectl -n demo exec deploy/gate-service -- wget -qO- --post-data '' http://127.0.0.1:8080/gate/promotion/check
 MSG
-
