@@ -463,3 +463,61 @@ istio-proxy
 ```
 
 这是当前 Istio/Kubernetes 组合下使用 restartable init container 形式注入 sidecar 的表现，不是没有注入。
+
+### 12. Flagger 安装和初始化成功
+
+执行命令：
+
+```bash
+./scripts/07-install-flagger.sh
+```
+
+安装组件：
+
+```text
+flagger
+flagger-loadtester
+```
+
+创建 ArgoCD Application：
+
+```text
+demo-api-canary
+```
+
+验证命令：
+
+```bash
+kubectl -n flagger-system get pods
+kubectl -n argocd get application demo-api-canary
+kubectl -n demo get canary demo-api
+kubectl -n demo get deploy,svc,virtualservice,destinationrule | grep demo-api
+```
+
+结果：
+
+```text
+flagger Ready
+flagger-loadtester Ready
+demo-api-canary ArgoCD Sync=Synced
+Canary demo-api phase=Initialized
+```
+
+Flagger 生成/管理的资源：
+
+```text
+deployment/demo-api-primary
+service/demo-api
+service/demo-api-primary
+service/demo-api-canary
+virtualservice/demo-api
+destinationrule/demo-api-primary
+destinationrule/demo-api-canary
+```
+
+说明：
+
+```text
+之前手动创建的 VirtualService/demo-api 只是 Istio baseline 测试用。
+安装 Flagger 后已删除，后续由 Flagger 接管 demo-api 的 VirtualService。
+```
