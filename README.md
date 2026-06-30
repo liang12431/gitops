@@ -51,3 +51,10 @@ curl -H "x-canary: true" http://demo.local/version
 docs/execution-log.md
 ```
 
+## 操作手册
+
+日常使用、访问地址、账号、测试命令、改代码后重新部署、promotion/rollback 和排查流程记录在：
+
+```text
+docs/operation-manual.md
+```
