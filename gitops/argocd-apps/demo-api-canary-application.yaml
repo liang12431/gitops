@@ -1,20 +1,34 @@
+# 这是 ArgoCD Application：专门负责同步 Flagger Canary CR。
+# 它不会直接创建 app-a/app-b Pod，而是把 canary.yaml 交给 Kubernetes，
+# 后续由 Flagger Controller 读取 Canary CR 并生成/维护 primary/canary 资源。
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  # ArgoCD UI 里显示的应用名。
   name: demo-api-canary
+  # Application 资源本身放在 argocd namespace。
   namespace: argocd
 spec:
+  # 使用默认 ArgoCD project。
   project: default
   source:
+    # GitHub 远端仓库地址；本地实验可能被脚本 patch 成本地 mirror。
     repoURL: https://github.com/liang12431/gitops.git
+    # 跟随仓库默认分支最新提交。
     targetRevision: HEAD
+    # ArgoCD 从这个目录读取 canary.yaml。
     path: gitops/applications/demo-api-canary
   destination:
+    # 同步到当前 Kubernetes 集群。
     server: https://kubernetes.default.svc
+    # Canary CR 创建在 demo namespace，因为它要监听 demo namespace 里的 Deployment/demo-api。
     namespace: demo
   syncPolicy:
     automated:
+      # Git 中删除 Canary CR 时，ArgoCD 会删除集群里的 Canary CR。
       prune: true
+      # 如果 Canary CR 被手动改了，ArgoCD 会自动恢复成 Git 里的配置。
       selfHeal: true
     syncOptions:
+      # namespace 不存在时允许创建。
       - CreateNamespace=true

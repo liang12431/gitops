@@ -1,20 +1,29 @@
+# 这是 NGINX baseline 的 Ingress。
+# 它只用于证明普通 Kubernetes + NGINX 访问链路可用。
+# 最终 Flagger/Istio 灰度访问主要走 Istio Gateway，不走这个 Ingress。
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  # Ingress 名字。
   name: demo-api
   annotations:
+    # NGINX Ingress 注解：把匹配到的路径重写到 /。
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
+  # 指定由 ingress-nginx controller 处理这个 Ingress。
   ingressClassName: nginx
   rules:
+    # 请求 Host 必须是 demo.local。
     - host: demo.local
       http:
         paths:
+          # 匹配所有 / 前缀请求。
           - path: /
             pathType: Prefix
             backend:
               service:
+                # NGINX Ingress 会把请求转发到 Service/demo-api。
                 name: demo-api
                 port:
+                  # Service/demo-api 的 8080 端口。
                   number: 8080
-

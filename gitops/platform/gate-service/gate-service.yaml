@@ -1,35 +1,55 @@
+# gate-service 是一个很小的 HTTP 服务，用于 Flagger webhook。
+# Flagger 调 /gate/promotion/check 判断是否允许 promotion。
+# Flagger 调 /gate/rollback/check 判断是否触发 rollback。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  # Deployment 名字。
   name: gate-service
+  # 放在 demo namespace，方便 Flagger 通过 http://gate-service.demo:8080 访问。
   namespace: demo
 spec:
+  # 本地实验 1 个副本即可。
   replicas: 1
   selector:
     matchLabels:
+      # Deployment 管理 app=gate-service 的 Pod。
       app: gate-service
   template:
     metadata:
       labels:
+        # Pod 标签；下面 Service selector 会用它找到 gate-service Pod。
         app: gate-service
     spec:
       containers:
+        # gate-service 容器。
         - name: gate-service
+          # 本地构建并推送到 localhost:5001 的 gate-service 镜像。
           image: localhost:5001/demo/gate-service:0.1.1
+          # 本地环境如果已有镜像，不强制重新拉；更新代码要升级 tag。
           imagePullPolicy: IfNotPresent
           ports:
+            # gate-service 监听 8080。
             - name: http
               containerPort: 8080
 ---
+# gate-service 的 ClusterIP Service。
+# Flagger webhook URL 中使用 http://gate-service.demo:8080，就是通过这个 Service 访问 Pod。
 apiVersion: v1
 kind: Service
 metadata:
+  # Service 名字；集群内 DNS 是 gate-service.demo.svc.cluster.local。
   name: gate-service
+  # Service 和 Pod 都在 demo namespace。
   namespace: demo
 spec:
   selector:
+    # 通过 app=gate-service 找到上面 Deployment 创建的 Pod。
     app: gate-service
   ports:
+    # 暴露 http 端口。
     - name: http
+      # Service 端口。
       port: 8080
+      # 转发到 Pod 中名为 http 的 containerPort，也就是 8080。
       targetPort: http

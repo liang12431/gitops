@@ -1,5 +1,7 @@
+# Istio 平台资源的 Kustomize 入口。
+# 当前只包含 Gateway baseline 文件。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # 定义 Istio Gateway，以及安装 Flagger 前的 baseline VirtualService。
   - gateway.yaml
-

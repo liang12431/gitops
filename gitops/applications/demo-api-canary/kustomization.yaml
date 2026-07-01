@@ -1,5 +1,7 @@
+# 这是 Flagger Canary 配置的 Kustomize 入口。
+# ArgoCD 的 demo-api-canary Application 会读取这个目录。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # Canary CR：告诉 Flagger 监听哪个 Deployment，以及怎么做灰度。
   - canary.yaml
-

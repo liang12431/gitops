@@ -1,14 +1,23 @@
+# 这是 demo-api 的稳定 Service。
+# 在最初 NGINX baseline 阶段，它通过 selector app=demo-api 找到 Deployment/demo-api 的 Pod。
+# 安装 Flagger 后，Flagger 会接管这个 Service，并把 selector 改成 app=demo-api-primary。
 apiVersion: v1
 kind: Service
 metadata:
+  # Service 名字。集群内访问地址是 demo-api.demo.svc.cluster.local。
   name: demo-api
   labels:
+    # 给 Service 自身打标签，便于查询和管理。
     app: demo-api
 spec:
   selector:
+    # 初始选择 app=demo-api 的 Pod。
+    # Flagger 运行后会把它改成 app=demo-api-primary，让普通流量始终走稳定版本。
     app: demo-api
   ports:
+    # 暴露一个名为 http 的 Service 端口。
     - name: http
+      # Service 对外暴露的端口。
       port: 8080
+      # 转发到 Pod 中名为 http 的 containerPort，也就是 8080。
       targetPort: http
-

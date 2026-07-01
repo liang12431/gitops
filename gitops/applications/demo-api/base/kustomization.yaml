@@ -1,6 +1,9 @@
+# 这是 demo-api 的 Kustomize base。
+# base 放通用资源，不直接写环境差异；overlay/local 会引用它并替换镜像。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # 定义 Deployment/demo-api，默认镜像是 app-a。
   - deployment.yaml
+  # 定义 Service/demo-api，供 NGINX/Prometheus/Flagger 等按服务名访问。
   - service.yaml
-

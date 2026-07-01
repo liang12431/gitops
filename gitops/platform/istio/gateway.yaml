@@ -1,33 +1,63 @@
+# 这是 Istio Gateway。
+# 重点理解：
+# 1. Gateway 只负责让 istio-ingressgateway 监听某个端口和 Host。
+# 2. Gateway 本身不会直接“找到后面的 Service”。
+# 3. 真正把请求转发到哪个 Service，是 VirtualService 的 destination.host 决定的。
+# 4. 安装 Flagger 后，下面这个手写 VirtualService 会被删除，改由 Flagger 自动生成新的 VirtualService。
 apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
+  # Gateway 名字。Flagger Canary 里的 service.gateways 会引用它。
   name: demo-gateway
+  # Gateway 放在 demo namespace，和业务路由放一起。
   namespace: demo
 spec:
   selector:
+    # 这个 selector 选择 istio-system namespace 里的 istio-ingressgateway Pod。
+    # istio-ingressgateway Pod 通常带有 label：istio=ingressgateway。
+    # 所以含义是：让这个 Gateway 配置作用到 ingress gateway 的 Envoy 上。
     istio: ingressgateway
   servers:
+    # 一个 Gateway 可以声明多个 server；这里声明 HTTP 80。
     - port:
+        # Envoy 对外监听 80 端口；本地通过 Service NodePort 31635 映射进来。
         number: 80
+        # 端口名字，Istio 要求端口有协议语义。
         name: http
+        # 明确这是 HTTP 流量。
         protocol: HTTP
       hosts:
+        # 只有 Host header 为 demo-istio.local 的请求会进入这个 Gateway 路由。
         - demo-istio.local
 ---
+# 这是安装 Flagger 前的手写 baseline VirtualService。
+# 它用来验证 Istio Gateway 能把请求转发到 demo-api Service。
+# 安装 Flagger 后，scripts/07-install-flagger.sh 会删除这个 VirtualService，
+# 然后 Flagger 根据 canary.yaml 自动生成新的 VirtualService/demo-api。
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
+  # VirtualService 名字。Flagger 后续也会生成同名资源。
   name: demo-api
+  # 和 Gateway 一样放在 demo namespace。
   namespace: demo
 spec:
   hosts:
+    # 匹配请求 Host。必须和 Gateway servers.hosts 对得上。
     - demo-istio.local
   gateways:
+    # 把这个 VirtualService 绑定到上面的 Gateway/demo-gateway。
+    # 这一步的意思是：进入 demo-gateway 的请求，继续用这里的 http 路由规则处理。
     - demo-gateway
   http:
+    # baseline 阶段没有 header 分流，所有 HTTP 请求都走这个 route。
     - route:
         - destination:
+            # 关键：VirtualService 是通过 destination.host 找到后端 Service 的。
+            # 这里写的是 Kubernetes Service 的完整 DNS：
+            # service.namespace.svc.cluster.local
+            # 因此它会转发到 Service/demo-api，再由 Service selector 找到后面的 Pod。
             host: demo-api.demo.svc.cluster.local
             port:
+              # 转发到 Service/demo-api 的 8080 端口。
               number: 8080
-

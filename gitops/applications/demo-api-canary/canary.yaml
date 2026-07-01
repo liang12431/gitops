@@ -1,36 +1,59 @@
+# 这是 Flagger Canary CR。
+# 它描述“如何把 Deployment/demo-api 的新版本渐进式发布出去”。
+# Flagger 会根据这个 CR 自动创建/维护 primary、canary Service、VirtualService、DestinationRule。
 apiVersion: flagger.app/v1beta1
 kind: Canary
 metadata:
+  # Canary 名字，通常和目标服务名一致。
   name: demo-api
+  # Canary 必须和 targetRef Deployment 在同一个 namespace。
   namespace: demo
 spec:
+  # 使用 Istio 作为流量治理 provider。
   provider: istio
   targetRef:
+    # Flagger 监听的是 Kubernetes Deployment。
     apiVersion: apps/v1
     kind: Deployment
+    # 关键：监听 Deployment/demo-api。
+    # 当 ArgoCD 把 demo-api 镜像从 app-a 改成 app-b 时，Flagger 会检测到 template 变化。
     name: demo-api
+  # 发布最长等待时间，超过还没成功会判定失败。
   progressDeadlineSeconds: 600
   service:
+    # Flagger 生成的 Service 使用 8080 端口。
     port: 8080
     gateways:
+      # 关键：这里引用 platform/istio/gateway.yaml 中定义的 Gateway/demo-gateway。
+      # Flagger 生成 VirtualService 时，会把它挂到这个 Gateway 上。
       - demo-gateway
     hosts:
+      # 只有 Host 为 demo-istio.local 的请求会匹配 Flagger 生成的 VirtualService。
       - demo-istio.local
     match:
+      # 普通 URI 匹配规则，匹配所有以 / 开头的路径。
       - uri:
           prefix: /
   analysis:
+    # Flagger 每 30 秒跑一轮分析。
     interval: 30s
+    # 允许失败次数阈值；本地实验设得很小，方便快速看到结果。
     threshold: 1
+    # 只跑 1 次迭代，降低本地等待时间。
     iterations: 1
     match:
+      # header 路由规则：带 x-canary:true 的请求进入 canary。
       - headers:
           x-canary:
             exact: "true"
     webhooks:
+      # promotion gate：Flagger promotion 前会调用这个接口。
+      # 返回 200 才继续提升 canary；返回 403 就停在 WaitingPromotion。
       - name: check promotion confirmation status
         type: confirm-promotion
         url: http://gate-service.demo:8080/gate/promotion/check
+      # rollback gate：Flagger 每轮会调用这个接口判断是否人工触发回滚。
+      # 返回 200 表示触发 rollback；返回 403 表示不回滚。
       - name: check rollback confirmation status
         type: rollback
         url: http://gate-service.demo:8080/gate/rollback/check

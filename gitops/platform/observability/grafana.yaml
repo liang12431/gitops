@@ -1,62 +1,90 @@
+# Grafana 数据源配置：启动时自动配置 Prometheus 数据源。
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  # ConfigMap 名字。
   name: grafana-datasources
+  # 放在 observability namespace。
   namespace: observability
 data:
+  # Grafana provisioning datasources 配置文件。
   prometheus.yaml: |
     apiVersion: 1
     datasources:
+      # 数据源显示名。
       - name: Prometheus
+        # 数据源类型。
         type: prometheus
+        # proxy 表示 Grafana 后端去访问 Prometheus，而不是浏览器直接访问。
         access: proxy
+        # Prometheus 在 Kubernetes 集群内的 Service DNS。
         url: http://prometheus.observability.svc.cluster.local:9090
+        # 设置为默认数据源。
         isDefault: true
 ---
+# Grafana Deployment。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  # Deployment 名字。
   name: grafana
+  # 放在 observability namespace。
   namespace: observability
 spec:
+  # 本地实验 1 个副本即可。
   replicas: 1
   selector:
     matchLabels:
+      # Deployment 管理 app=grafana 的 Pod。
       app: grafana
   template:
     metadata:
       labels:
+        # Pod 标签；Service selector 会用它找到 Pod。
         app: grafana
     spec:
       containers:
+        # Grafana 容器。
         - name: grafana
+          # Grafana 镜像版本。
           image: grafana/grafana:11.3.0
           ports:
+            # Grafana Web UI 端口。
             - name: http
               containerPort: 3000
           env:
+            # 本地实验 Grafana 管理员用户名。
             - name: GF_SECURITY_ADMIN_USER
               value: admin
+            # 本地实验 Grafana 管理员密码。
             - name: GF_SECURITY_ADMIN_PASSWORD
               value: admin
           volumeMounts:
+            # 挂载数据源 provisioning 配置。
             - name: datasources
               mountPath: /etc/grafana/provisioning/datasources
       volumes:
+        # datasources 卷来自 grafana-datasources ConfigMap。
         - name: datasources
           configMap:
             name: grafana-datasources
 ---
+# Grafana Service，用于集群内访问和本地 port-forward。
 apiVersion: v1
 kind: Service
 metadata:
+  # Service 名字；集群内 DNS 是 grafana.observability.svc.cluster.local。
   name: grafana
+  # 放在 observability namespace。
   namespace: observability
 spec:
   selector:
+    # 通过 app=grafana 找到 Grafana Pod。
     app: grafana
   ports:
+    # 暴露 Grafana HTTP 端口。
     - name: http
+      # Service 端口。
       port: 3000
+      # 转发到容器中名为 http 的端口，也就是 3000。
       targetPort: http
-

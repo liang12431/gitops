@@ -1,10 +1,19 @@
+# 这是本地环境的 Kustomize overlay。
+# ArgoCD 读取的就是这个目录，而不是直接读取 base。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+ # 这个 overlay 渲染出的所有资源默认放到 demo namespace。
 namespace: demo
 resources:
+  # 引用通用 base：Deployment/demo-api 和 Service/demo-api。
   - ../../base
+  # 本地 NGINX baseline 使用的 Ingress。
   - ingress.yaml
 images:
+  # 找到 base/deployment.yaml 里的 localhost:5001/demo/app-a 镜像。
   - name: localhost:5001/demo/app-a
+    # 渲染时把镜像名替换成 app-b。
+    # 这就是为什么你看不到单独 app-b Deployment YAML：app-b 是通过这里替换出来的。
     newName: localhost:5001/demo/app-b
+    # 替换后的镜像 tag。
     newTag: 0.1.1

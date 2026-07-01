@@ -1,5 +1,7 @@
+# gate-service 的 Kustomize 入口。
+# gate-service 用来模拟 MPA 里的 promotion/rollback 人工审批 gate。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # 包含 Deployment/gate-service 和 Service/gate-service。
   - gate-service.yaml
-

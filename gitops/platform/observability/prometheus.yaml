@@ -1,67 +1,97 @@
+# Prometheus 配置：告诉 Prometheus 去哪里抓指标。
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  # ConfigMap 名字，Deployment 会把它挂载到 /etc/prometheus。
   name: prometheus-config
+  # 放在 observability namespace。
   namespace: observability
 data:
+  # prometheus.yml 是 Prometheus 启动时读取的配置文件内容。
   prometheus.yml: |
     global:
+      # 每 15 秒抓取一次指标。
       scrape_interval: 15s
 
     scrape_configs:
+      # 抓 Spring Boot Actuator 暴露的 Prometheus 指标。
       - job_name: demo-api-actuator
+        # Actuator Prometheus endpoint。
         metrics_path: /actuator/prometheus
         static_configs:
           - targets:
+              # Kubernetes Service DNS：demo namespace 下的 Service/demo-api。
+              # Prometheus 通过这个 Service 抓当前稳定入口的指标。
               - demo-api.demo.svc.cluster.local:8080
 
+      # 抓 OTel Collector 自己暴露出来的 Prometheus exporter 指标。
       - job_name: otel-collector
         static_configs:
           - targets:
+              # OTel Collector Service 的 9464 端口。
               - otel-collector.observability.svc.cluster.local:9464
 ---
+# Prometheus Deployment。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  # Deployment 名字。
   name: prometheus
+  # 放在 observability namespace。
   namespace: observability
 spec:
+  # 本地实验 1 个副本即可。
   replicas: 1
   selector:
     matchLabels:
+      # Deployment 管理 app=prometheus 的 Pod。
       app: prometheus
   template:
     metadata:
       labels:
+        # Pod 标签；Service selector 会用这个标签找到 Pod。
         app: prometheus
     spec:
       containers:
+        # Prometheus 容器。
         - name: prometheus
+          # Prometheus 镜像版本。
           image: prom/prometheus:v2.55.1
           args:
+            # 指定配置文件路径；这个文件来自下面挂载的 ConfigMap。
             - --config.file=/etc/prometheus/prometheus.yml
+            # 指定本地 TSDB 存储目录；本地实验没有挂 PVC，Pod 重建后数据会丢。
             - --storage.tsdb.path=/prometheus
           ports:
+            # Prometheus Web UI 和 API 端口。
             - name: http
               containerPort: 9090
           volumeMounts:
+            # 把 ConfigMap 挂到 /etc/prometheus。
             - name: config
               mountPath: /etc/prometheus
       volumes:
+        # 定义一个名为 config 的卷，来源是 prometheus-config ConfigMap。
         - name: config
           configMap:
             name: prometheus-config
 ---
+# Prometheus Service，用于集群内访问和本地 port-forward。
 apiVersion: v1
 kind: Service
 metadata:
+  # Service 名字；集群内 DNS 是 prometheus.observability.svc.cluster.local。
   name: prometheus
+  # 放在 observability namespace。
   namespace: observability
 spec:
   selector:
+    # 通过 app=prometheus 找到 Prometheus Pod。
     app: prometheus
   ports:
+    # 暴露 Prometheus HTTP 端口。
     - name: http
+      # Service 端口。
       port: 9090
+      # 转发到容器中名为 http 的端口，也就是 9090。
       targetPort: http
-

@@ -1,6 +1,11 @@
+# observability 平台资源的 Kustomize 入口。
+# 这里统一部署 OTel Collector、Prometheus、Grafana。
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  # 接收应用 OTLP traces/metrics/logs，并把 metrics 暴露给 Prometheus。
   - otel-collector.yaml
+  # 抓取 demo-api Actuator 指标和 OTel Collector exporter 指标。
   - prometheus.yaml
+  # 展示 Prometheus 指标的 UI。
   - grafana.yaml

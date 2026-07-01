@@ -1,57 +1,91 @@
+# 这是业务应用 demo-api 的基础 Deployment。
+# 注意：Git 里只有这一个 Deployment 模板，不会分别写 app-a-deployment.yaml 和 app-b-deployment.yaml。
+# app-a/app-b 的切换由 overlay/local/kustomization.yaml 通过 images 字段替换镜像完成。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  # Deployment 名字。Flagger Canary 的 targetRef.name 就是监听这个名字。
   name: demo-api
   labels:
+    # 资源标签，Service selector 会用这个标签找到 Pod。
     app: demo-api
 spec:
+  # 本地实验只跑 1 个副本，便于观察。
   replicas: 1
   selector:
     matchLabels:
+      # Deployment 管理带 app=demo-api 标签的 Pod。
       app: demo-api
   template:
     metadata:
       labels:
+        # Pod 模板标签。Service/demo-api 初始 selector 会根据它找到 Pod。
         app: demo-api
     spec:
       containers:
+        # 业务容器名。Istio 注入后，还会有 istio-proxy sidecar。
         - name: app
+          # base 默认是 app-a 镜像。
+          # overlay/local 可以把它替换成 app-b，触发 Flagger 灰度。
           image: localhost:5001/demo/app-a:0.1.1
+          # 本地镜像如果节点已有同 tag，K8s 不会强制重新拉取。
+          # 所以改代码后要升级镜像 tag。
           imagePullPolicy: IfNotPresent
           ports:
+            # Spring Boot 应用监听 8080。
             - containerPort: 8080
+              # 给端口命名为 http，Service targetPort 可以引用这个名字。
               name: http
           env:
+            # OpenTelemetry 服务名，OTel Collector/日志里会看到这个名字。
             - name: OTEL_SERVICE_NAME
               value: demo-api
+            # OTLP gRPC 默认 endpoint，保留给兼容配置使用。
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://otel-collector.observability:4317
+            # traces 通过 OTLP HTTP 发到 OTel Collector。
             - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
               value: http://otel-collector.observability:4318/v1/traces
+            # metrics 通过 OTLP HTTP 发到 OTel Collector。
             - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
               value: http://otel-collector.observability:4318/v1/metrics
+            # 开启 trace 导出。
             - name: OTEL_TRACES_EXPORTER
               value: otlp
+            # 开启 metrics 导出。
             - name: OTEL_METRICS_EXPORTER
               value: otlp
+            # 开启 logs 导出配置；当前主要用于实验理解。
             - name: OTEL_LOGS_EXPORTER
               value: otlp
           readinessProbe:
             httpGet:
+              # readiness：Pod 是否可以接流量。
               path: /actuator/health/readiness
+              # 这里引用上面命名的容器端口 http，也就是 8080。
               port: http
+            # 容器启动 10 秒后开始探测。
             initialDelaySeconds: 10
+            # 每 5 秒探测一次。
             periodSeconds: 5
           livenessProbe:
             httpGet:
+              # liveness：Pod 是否还活着，不健康时 kubelet 会重启容器。
               path: /actuator/health/liveness
+              # 这里引用上面命名的容器端口 http，也就是 8080。
               port: http
+            # 容器启动 20 秒后开始探测。
             initialDelaySeconds: 20
+            # 每 10 秒探测一次。
             periodSeconds: 10
           resources:
             requests:
+              # 调度时至少预留 0.1 个 CPU。
               cpu: 100m
+              # 调度时至少预留 256Mi 内存。
               memory: 256Mi
             limits:
+              # 限制最多使用 0.5 个 CPU。
               cpu: 500m
+              # 限制最多使用 512Mi 内存。
               memory: 512Mi

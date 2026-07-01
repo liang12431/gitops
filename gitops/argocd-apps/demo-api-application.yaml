@@ -1,29 +1,49 @@
+# 这是 ArgoCD Application：它不是业务 Deployment 本身，
+# 而是告诉 ArgoCD“去 Git 仓库哪个目录读取业务 YAML，并同步到哪个 K8s namespace”。
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  # ArgoCD UI 里显示的应用名。
   name: demo-api
+  # Application 资源本身放在 argocd namespace，因为 ArgoCD 安装在这里。
   namespace: argocd
 spec:
+  # 使用 ArgoCD 默认 project。本地实验不单独划分项目权限。
   project: default
   source:
+    # GitHub 远端仓库地址。
+    # 注意：本地实验中如果 Pod 访问 GitHub EOF，会用 scripts/09-use-local-git-mirror.sh
+    # 临时把 live Application patch 成 git://host.orb.internal/local-gitops-lab-bare.git。
     repoURL: https://github.com/liang12431/gitops.git
+    # 跟随仓库默认分支最新提交。
     targetRevision: HEAD
+    # ArgoCD 会读取这个目录；这个目录里有 Kustomization，会引用 base 并替换镜像。
     path: gitops/applications/demo-api/overlays/local
   destination:
+    # 同步到当前 ArgoCD 所在的 Kubernetes 集群。
     server: https://kubernetes.default.svc
+    # 业务资源最终创建到 demo namespace。
     namespace: demo
   syncPolicy:
     automated:
+      # Git 中删除的资源，ArgoCD 会从集群里删除。
       prune: true
+      # 集群里资源被手动改了，ArgoCD 会按 Git 自动改回去。
       selfHeal: true
     syncOptions:
+      # namespace 不存在时允许 ArgoCD 创建。
       - CreateNamespace=true
+      # 让下面 ignoreDifferences 真正参与自动同步，避免 ArgoCD 抢 Flagger 管理的字段。
       - RespectIgnoreDifferences=true
+  # Flagger 会接管 Service/demo-api 的 selector 和 ports。
+  # 如果 ArgoCD 不忽略这些字段，就会和 Flagger 互相覆盖。
   ignoreDifferences:
     - group: ""
       kind: Service
       name: demo-api
       namespace: demo
       jsonPointers:
+        # Flagger 会把 Service/demo-api 指向 app=demo-api-primary。
         - /spec/selector
+        # Flagger 可能把 targetPort 从命名端口 http 解析成数字 8080。
         - /spec/ports

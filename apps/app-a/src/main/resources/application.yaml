@@ -1,25 +1,35 @@
+# app-a 的 Spring Boot 配置。
 server:
+  # 应用监听端口；Deployment/Service/Ingress/Istio 都按 8080 转发到这里。
   port: 8080
 
 management:
+  # Spring Boot Actuator 的 tracing 配置。
   tracing:
     sampling:
+      # 1.0 表示本地实验中 100% 请求都采样，方便看到 trace。
       probability: 1.0
+  # Actuator 内置的 OTLP 导出配置。
   otlp:
     tracing:
+      # trace 上报地址；优先读环境变量，没有就用 OTel Collector 默认地址。
       endpoint: ${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:http://otel-collector.observability:4318/v1/traces}
     metrics:
       export:
+        # metrics 上报地址；优先读环境变量，没有就用 OTel Collector 默认地址。
         url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://otel-collector.observability:4318/v1/metrics}
   endpoints:
     web:
       exposure:
+        # 暴露这些 Actuator endpoint，Prometheus 会抓 /actuator/prometheus。
         include: health,info,prometheus,metrics
   endpoint:
     health:
       probes:
+        # 开启 /actuator/health/liveness 和 /actuator/health/readiness，供 K8s 探针使用。
         enabled: true
 
 spring:
   application:
+    # Spring 应用名，日志/指标中可以看到。
     name: app-a

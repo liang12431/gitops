@@ -1,87 +1,122 @@
+# OTel Collector 配置。
+# 应用把 traces/metrics/logs 通过 OTLP 发给 Collector。
+# Collector 当前把 traces/logs 打到 debug exporter，把 metrics 暴露成 Prometheus 可抓取格式。
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  # ConfigMap 名字，Deployment 会挂载它。
   name: otel-collector-config
+  # 放在 observability namespace。
   namespace: observability
 data:
+  # OTel Collector 启动配置。
   config.yaml: |
     receivers:
+      # OTLP receiver：接收应用发来的 telemetry。
       otlp:
         protocols:
+          # OTLP gRPC，监听 4317。
           grpc:
             endpoint: 0.0.0.0:4317
+          # OTLP HTTP，监听 4318。
           http:
             endpoint: 0.0.0.0:4318
 
     exporters:
+      # debug exporter：把收到的数据打印到 Collector 日志里，方便本地学习。
       debug:
         verbosity: basic
+      # prometheus exporter：把收到的 metrics 转成 Prometheus scrape endpoint。
       prometheus:
         endpoint: 0.0.0.0:9464
 
     service:
       pipelines:
+        # trace pipeline：OTLP 收进来，debug 打日志。
         traces:
           receivers: [otlp]
           exporters: [debug]
+        # metrics pipeline：OTLP 收进来，暴露给 Prometheus，同时 debug 打日志。
         metrics:
           receivers: [otlp]
           exporters: [prometheus, debug]
+        # logs pipeline：OTLP 收进来，debug 打日志。
         logs:
           receivers: [otlp]
           exporters: [debug]
 ---
+# OTel Collector Deployment。
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  # Deployment 名字。
   name: otel-collector
+  # 放在 observability namespace。
   namespace: observability
 spec:
+  # 本地实验 1 个副本即可。
   replicas: 1
   selector:
     matchLabels:
+      # Deployment 管理 app=otel-collector 的 Pod。
       app: otel-collector
   template:
     metadata:
       labels:
+        # Pod 标签；Service selector 会用它找到 Pod。
         app: otel-collector
     spec:
       containers:
+        # OTel Collector 容器。
         - name: otel-collector
+          # 使用 contrib 版本，包含更多 receiver/exporter。
           image: otel/opentelemetry-collector-contrib:0.111.0
           args:
+            # 指定配置文件路径；这个文件来自 ConfigMap 挂载。
             - --config=/etc/otelcol/config.yaml
           ports:
+            # OTLP gRPC 接收端口。
             - name: otlp-grpc
               containerPort: 4317
+            # OTLP HTTP 接收端口。
             - name: otlp-http
               containerPort: 4318
+            # Prometheus exporter 暴露 metrics 的端口。
             - name: prom-exporter
               containerPort: 9464
           volumeMounts:
+            # 把 ConfigMap 挂到 /etc/otelcol。
             - name: config
               mountPath: /etc/otelcol
       volumes:
+        # config 卷来自 otel-collector-config ConfigMap。
         - name: config
           configMap:
             name: otel-collector-config
 ---
+# OTel Collector Service。
+# 应用通过这个 Service 发送 OTLP，Prometheus 也通过这个 Service 抓 9464 指标。
 apiVersion: v1
 kind: Service
 metadata:
+  # Service 名字；集群内 DNS 是 otel-collector.observability.svc.cluster.local。
   name: otel-collector
+  # 放在 observability namespace。
   namespace: observability
 spec:
   selector:
+    # 通过 app=otel-collector 找到 Collector Pod。
     app: otel-collector
   ports:
+    # 暴露 OTLP gRPC。
     - name: otlp-grpc
       port: 4317
       targetPort: otlp-grpc
+    # 暴露 OTLP HTTP。
     - name: otlp-http
       port: 4318
       targetPort: otlp-http
+    # 暴露 Prometheus exporter。
     - name: prom-exporter
       port: 9464
       targetPort: prom-exporter
-

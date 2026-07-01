@@ -1,5 +1,7 @@
+# observability namespace 用来放观测组件：
+# OTel Collector、Prometheus、Grafana。
 apiVersion: v1
 kind: Namespace
 metadata:
+  # namespace 名字。
   name: observability
-

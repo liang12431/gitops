@@ -1,5 +1,7 @@
+# demo namespace 用来放业务应用和灰度相关资源：
+# demo-api、demo-api-primary、demo-api-canary、gate-service、Canary、VirtualService 等。
 apiVersion: v1
 kind: Namespace
 metadata:
+  # namespace 名字。
   name: demo
-
