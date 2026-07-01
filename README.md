@@ -58,3 +58,9 @@ docs/execution-log.md
 ```text
 docs/operation-manual.md
 ```
+
+User -> Order 服务间调用、Baidu egress、order canary 的专项说明在：
+
+```text
+docs/user-order-chain.md
+```

@@ -909,3 +909,37 @@ kubectl -n demo exec deploy/gate-service -- \
 kubectl -n demo get canary demo-api -w
 ```
 
+## 16. User -> Order 新链路
+
+详细说明见：
+
+```text
+docs/user-order-chain.md
+```
+
+当前访问：
+
+```bash
+NODE_PORT=$(kubectl -n istio-system get svc istio-ingressgateway \
+  -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+
+curl -s -H 'Host: user.local' "http://127.0.0.1:${NODE_PORT}/user/1"
+curl -s -H 'Host: user.local' "http://127.0.0.1:${NODE_PORT}/user/2"
+curl -s -H 'Host: user.local' "http://127.0.0.1:${NODE_PORT}/user/3"
+```
+
+含义：
+
+```text
+user/1 -> user-service 访问 www.baidu.com
+user/2 -> user-service 调 order-api primary，返回 order v1
+user/3 -> user-service 带 x-order-canary:true 调 order-api，返回 order v2 canary
+```
+
+检查：
+
+```bash
+kubectl -n argocd get applications user-service order-api order-api-canary
+kubectl -n demo get canary order-api -o wide
+kubectl -n demo get virtualservice order-api -o yaml
+```

@@ -682,6 +682,253 @@ kubectl -n demo exec deploy/gate-service -- \
   wget -qO- --post-data '' http://127.0.0.1:8080/gate/promotion/open
 ```
 
+## 2026-07-01
+
+### 19. 新增 user-service -> order-api 全链路
+
+目标：
+
+```text
+新增 user-service，走 Istio 入口。
+user/1 -> user-service 访问 www.baidu.com。
+user/2 -> user-service 正常调用 order-api primary，返回 order v1。
+user/3 -> user-service 带 x-order-canary:true 调用 order-api canary，返回 order v2。
+只有 order-api 使用 Flagger；user-service 只是普通 ArgoCD 部署。
+```
+
+新增应用：
+
+```text
+apps/user-service
+apps/order-service-v1
+apps/order-service-v2
+```
+
+新增 GitOps：
+
+```text
+gitops/applications/user-service
+gitops/applications/order-api
+gitops/applications/order-api-canary
+gitops/argocd-apps/user-service-application.yaml
+gitops/argocd-apps/order-api-application.yaml
+gitops/argocd-apps/order-api-canary-application.yaml
+```
+
+新增脚本：
+
+```text
+scripts/10-build-push-user-order-images.sh
+scripts/11-install-user-order-chain.sh
+```
+
+### 20. 构建 user/order 镜像
+
+执行命令：
+
+```bash
+VERSION=0.1.0 ./scripts/10-build-push-user-order-images.sh
+```
+
+遇到的问题：
+
+```text
+Docker build 默认 fancy progress 输出在本地终端中长时间停在：
+[+] Building 0.2s (
+```
+
+解决方案：
+
+```text
+把 scripts/10-build-push-user-order-images.sh 里的 docker build 改成：
+docker build --progress=plain ...
+plain 输出稳定，也方便定位具体构建步骤。
+```
+
+另一个小问题：
+
+```text
+构建推送成功后，用 curl 查询 registry tags 时无输出/等待过久。
+```
+
+处理：
+
+```bash
+docker image ls 'localhost:5001/demo/*' --format '{{.Repository}}:{{.Tag}} {{.ID}}' | sort
+curl --max-time 5 -s http://127.0.0.1:5001/v2/_catalog || true
+```
+
+最终镜像确认：
+
+```text
+localhost:5001/demo/user-service:0.1.0
+localhost:5001/demo/order-service-v1:0.1.0
+localhost:5001/demo/order-service-v2:0.1.0
+```
+
+### 21. 部署 user/order ArgoCD Applications
+
+执行命令：
+
+```bash
+./scripts/11-install-user-order-chain.sh
+kubectl apply -k gitops/platform/observability
+kubectl -n observability rollout restart deployment/prometheus
+kubectl -n observability rollout status deployment/prometheus --timeout=300s
+```
+
+说明：
+
+```text
+Prometheus 配置中新增了 user-service-actuator 和 order-api-actuator scrape job。
+ConfigMap 更新后需要重启 Prometheus Pod 才会重新加载配置。
+```
+
+检查命令：
+
+```bash
+kubectl -n argocd get applications user-service order-api order-api-canary
+kubectl -n demo get deploy,svc,canary | grep -E 'user-service|order-api'
+```
+
+初始结果：
+
+```text
+user-service       Synced / Healthy
+order-api          Synced / Healthy
+order-api-canary   Synced / Healthy
+order-api Canary   Initialized
+```
+
+### 22. 初始 user/order 链路验证
+
+获取 Istio Gateway NodePort：
+
+```bash
+PORT=$(kubectl -n istio-system get svc istio-ingressgateway \
+  -o jsonpath='{.spec.ports[?(@.name=="http2")].nodePort}')
+```
+
+执行：
+
+```bash
+curl --max-time 15 -s -H 'Host: user.local' "http://127.0.0.1:${PORT}/user/1"
+curl --max-time 15 -s -H 'Host: user.local' "http://127.0.0.1:${PORT}/user/2"
+curl --max-time 15 -s -H 'Host: order.local' "http://127.0.0.1:${PORT}/orders/2"
+```
+
+结果：
+
+```text
+user/1 -> route=baidu, target=http://www.baidu.com, downstreamStatus=200
+user/2 -> route=order-primary, orderResponse.version=v1
+order direct -> version=v1
+```
+
+### 23. 触发 order-api canary 到 v2
+
+修改：
+
+```text
+gitops/applications/order-api/overlays/local/kustomization.yaml
+```
+
+从：
+
+```yaml
+images:
+  - name: localhost:5001/demo/order-service-v1
+    newTag: 0.1.0
+```
+
+改成：
+
+```yaml
+images:
+  - name: localhost:5001/demo/order-service-v1
+    newName: localhost:5001/demo/order-service-v2
+    newTag: 0.1.0
+```
+
+提交并同步：
+
+```bash
+git add gitops/applications/order-api/overlays/local/kustomization.yaml
+git commit -m "Roll order API canary to v2"
+git push origin main
+./scripts/09-use-local-git-mirror.sh
+```
+
+等待：
+
+```bash
+kubectl -n demo get canary order-api -w
+```
+
+结果：
+
+```text
+order-api phase = WaitingPromotion
+deployment/order-api         = localhost:5001/demo/order-service-v2:0.1.0
+deployment/order-api-primary = localhost:5001/demo/order-service-v1:0.1.0
+```
+
+Flagger 生成的 VirtualService 重点：
+
+```yaml
+gateways:
+  - mesh
+  - user-order-gateway
+hosts:
+  - order.local
+  - order-api
+  - order-api.demo.svc.cluster.local
+http:
+  - match:
+      - headers:
+          x-order-canary:
+            exact: "true"
+    route:
+      - destination:
+          host: order-api-canary
+        weight: 100
+  - match:
+      - uri:
+          prefix: /
+    route:
+      - destination:
+          host: order-api-primary
+```
+
+### 24. 最终 user/order 链路验证
+
+执行：
+
+```bash
+curl --max-time 15 -s -H 'Host: user.local' "http://127.0.0.1:${PORT}/user/1"
+curl --max-time 15 -s -H 'Host: user.local' "http://127.0.0.1:${PORT}/user/2"
+curl --max-time 15 -s -H 'Host: user.local' "http://127.0.0.1:${PORT}/user/3"
+curl --max-time 15 -s -H 'Host: order.local' -H 'x-order-canary: true' "http://127.0.0.1:${PORT}/orders/3"
+```
+
+结果：
+
+```text
+user/1 -> route=baidu, downstreamStatus=200
+user/2 -> route=order-primary, orderResponse.version=v1
+user/3 -> route=order-canary, sentHeader=x-order-canary:true, orderResponse.version=v2
+order direct canary -> version=v2
+```
+
+结论：
+
+```text
+user-service 是普通 ArgoCD 应用。
+order-api 是被 Flagger 管理的 canary 应用。
+user/3 并不是直接访问 order-api-canary Service，而是访问 order-api Service，并带 x-order-canary:true。
+Istio sidecar 根据 Flagger 生成的 VirtualService/order-api，把这个请求转到 order-api-canary。
+```
+
 等待 Flagger：
 
 ```bash
