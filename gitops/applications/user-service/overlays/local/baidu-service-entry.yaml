@@ -1,0 +1,24 @@
+# ServiceEntry 用来告诉 Istio：www.baidu.com 是允许访问的外部服务。
+# 当前本地 mesh 通常默认 ALLOW_ANY，即使不写也可能能访问；
+# 这里显式声明，是为了让 user/1 -> Baidu 的 egress 链路更清晰。
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: baidu-external
+  namespace: demo
+spec:
+  hosts:
+    # user-service 会访问这个外部域名。
+    - www.baidu.com
+  location: MESH_EXTERNAL
+  ports:
+    # HTTP 访问 Baidu。
+    - number: 80
+      name: http
+      protocol: HTTP
+    # 如果 Baidu 返回 HTTPS redirect，Istio 也知道 443 是外部 TLS 端口。
+    - number: 443
+      name: tls
+      protocol: TLS
+  resolution: DNS
+

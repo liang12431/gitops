@@ -1,0 +1,13 @@
+# order-api 本地 overlay。
+# 第一阶段保持 order-service-v1，等 Flagger 初始化后再加 newName 替换成 order-service-v2。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: demo
+resources:
+  # 引用 order-api base。
+  - ../../base
+images:
+  # 初始镜像是 order-service-v1:0.1.0。
+  - name: localhost:5001/demo/order-service-v1
+    newTag: 0.1.0
+

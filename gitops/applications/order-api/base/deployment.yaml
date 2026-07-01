@@ -1,0 +1,60 @@
+# order-api 的基础 Deployment。
+# base 默认使用 order-service-v1 镜像；overlay 后续会把它替换成 order-service-v2 来触发 Flagger。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Flagger Canary 的 targetRef.name 会监听这个 Deployment。
+  name: order-api
+  labels:
+    app: order-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      # Deployment 管理 app=order-api 的 Pod。
+      app: order-api
+  template:
+    metadata:
+      labels:
+        # Pod 标签；初始 Service/order-api 会用这个标签找到 Pod。
+        app: order-api
+    spec:
+      containers:
+        - name: app
+          # 初始版本 v1。发布 canary 时由 overlay 替换成 order-service-v2。
+          image: localhost:5001/demo/order-service-v1:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: order-service
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: http://otel-collector.observability:4318/v1/traces
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: http://otel-collector.observability:4318/v1/metrics
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp
+            - name: OTEL_METRICS_EXPORTER
+              value: otlp
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+

@@ -24,6 +24,23 @@ data:
               # Prometheus 通过这个 Service 抓当前稳定入口的指标。
               - demo-api.demo.svc.cluster.local:8080
 
+      # 抓 user-service Actuator 暴露的 Prometheus 指标。
+      - job_name: user-service-actuator
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              # Kubernetes Service DNS：demo namespace 下的 Service/user-service。
+              - user-service.demo.svc.cluster.local:8080
+
+      # 抓 order-api Actuator 暴露的 Prometheus 指标。
+      - job_name: order-api-actuator
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets:
+              # Kubernetes Service DNS：demo namespace 下的 Service/order-api。
+              # Flagger 会让这个 Service 稳定指向 primary。
+              - order-api.demo.svc.cluster.local:8080
+
       # 抓 OTel Collector 自己暴露出来的 Prometheus exporter 指标。
       - job_name: otel-collector
         static_configs:

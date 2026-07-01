@@ -1,0 +1,78 @@
+# user-service 的 Deployment。
+# user-service 不走 Flagger，它只是普通 ArgoCD 部署，并通过 Istio sidecar 调用 order-api。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # Deployment 名字。
+  name: user-service
+  labels:
+    # Service selector 会用这个标签找到 Pod。
+    app: user-service
+spec:
+  # 本地实验 1 个副本即可。
+  replicas: 1
+  selector:
+    matchLabels:
+      # Deployment 管理 app=user-service 的 Pod。
+      app: user-service
+  template:
+    metadata:
+      labels:
+        # Pod 标签；Service selector 会用它找到 Pod。
+        app: user-service
+    spec:
+      containers:
+        # user-service 业务容器；demo namespace 开了 Istio injection 后会自动注入 istio-proxy。
+        - name: app
+          # user-service 镜像。
+          image: localhost:5001/demo/user-service:0.1.0
+          # 本地镜像不强制重新拉；改代码后请升级 tag。
+          imagePullPolicy: IfNotPresent
+          ports:
+            # Spring Boot 监听 8080。
+            - containerPort: 8080
+              name: http
+          env:
+            # user-service 默认调用 order-api 这个 K8s Service。
+            - name: ORDER_BASE_URL
+              value: http://order-api:8080
+            # user/1 会访问这个地址，用于演示外部访问/egress。
+            - name: BAIDU_URL
+              value: http://www.baidu.com
+            # OTel 服务名。
+            - name: OTEL_SERVICE_NAME
+              value: user-service
+            # OTLP HTTP traces endpoint。
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: http://otel-collector.observability:4318/v1/traces
+            # OTLP HTTP metrics endpoint。
+            - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+              value: http://otel-collector.observability:4318/v1/metrics
+            # 开启 traces。
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp
+            # 开启 metrics。
+            - name: OTEL_METRICS_EXPORTER
+              value: otlp
+          readinessProbe:
+            httpGet:
+              # readiness 探针。
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              # liveness 探针。
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+

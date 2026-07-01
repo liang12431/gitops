@@ -1,0 +1,58 @@
+# order-api 的 Flagger Canary CR。
+# 它只管理 order-api，user-service 不走 Flagger。
+apiVersion: flagger.app/v1beta1
+kind: Canary
+metadata:
+  name: order-api
+  namespace: demo
+spec:
+  # 使用 Istio 做流量治理。
+  provider: istio
+  targetRef:
+    # 监听 Deployment/order-api。
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-api
+  progressDeadlineSeconds: 600
+  service:
+    # order-api Service 端口。
+    port: 8080
+    gateways:
+      # mesh 表示服务网格内部调用也使用这个 VirtualService。
+      # user-service -> order-api 的调用要靠它才能按 header 走 canary。
+      - mesh
+      # user-order-gateway 表示也可以从外部 Host=order.local 访问 order-api。
+      - user-order-gateway
+    hosts:
+      # 外部访问 order-api 时使用 Host: order.local。
+      - order.local
+      # 内部短服务名，user-service 用 http://order-api:8080 调用。
+      - order-api
+      # 内部完整 K8s DNS，方便其它服务用完整域名调用时也能匹配。
+      - order-api.demo.svc.cluster.local
+    match:
+      # 普通 URI 匹配规则。
+      - uri:
+          prefix: /
+  analysis:
+    # 每 30 秒执行一轮分析。
+    interval: 30s
+    # 本地实验失败阈值设小一点，方便观察。
+    threshold: 1
+    # 本地实验只跑 1 轮，快速进入 WaitingPromotion。
+    iterations: 1
+    match:
+      # 带 x-order-canary:true 的请求进入 order canary。
+      - headers:
+          x-order-canary:
+            exact: "true"
+    webhooks:
+      # promotion gate：不开 gate 就停在 WaitingPromotion。
+      - name: check order promotion confirmation status
+        type: confirm-promotion
+        url: http://gate-service.demo:8080/gate/promotion/check
+      # rollback gate：打开 rollback gate 可触发回滚。
+      - name: check order rollback confirmation status
+        type: rollback
+        url: http://gate-service.demo:8080/gate/rollback/check
+

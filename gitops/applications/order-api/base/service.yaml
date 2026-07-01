@@ -1,0 +1,18 @@
+# order-api 的稳定 Service。
+# Flagger 初始化后会接管它，让它始终指向 order-api-primary。
+apiVersion: v1
+kind: Service
+metadata:
+  # 集群内服务名：order-api.demo.svc.cluster.local。
+  name: order-api
+  labels:
+    app: order-api
+spec:
+  selector:
+    # 初始指向 app=order-api；Flagger 后续会改成 app=order-api-primary。
+    app: order-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+

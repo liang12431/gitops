@@ -1,0 +1,55 @@
+# user/order 链路专用 Gateway。
+# 它选择 istio-ingressgateway，让外部请求可以用 Host=user.local 或 Host=order.local 进入网格。
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: user-order-gateway
+  namespace: demo
+spec:
+  selector:
+    # 选择 istio-system 里的 istio-ingressgateway Pod。
+    istio: ingressgateway
+  servers:
+    - port:
+        # Envoy 监听 HTTP 80；本机通过 istio-ingressgateway NodePort 访问。
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        # 对外访问 user-service 的 Host。
+        - user.local
+        # 对外直接访问 order-api 的 Host，主要用于验证 order canary。
+        - order.local
+---
+# user-service 的 VirtualService。
+# 它把 Host=user.local 的外部请求转发到 Service/user-service。
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: user-service
+  namespace: demo
+spec:
+  hosts:
+    # curl 时需要带 Host: user.local。
+    - user.local
+  gateways:
+    # 绑定上面的 Gateway。
+    - user-order-gateway
+  http:
+    - match:
+        # 匹配所有 /user 前缀请求。
+        - uri:
+            prefix: /user
+        # 也允许访问 /version。
+        - uri:
+            prefix: /version
+        # 也允许访问根路径。
+        - uri:
+            exact: /
+      route:
+        - destination:
+            # 转发到 Kubernetes Service/user-service。
+            host: user-service
+            port:
+              number: 8080
+

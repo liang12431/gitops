@@ -46,16 +46,28 @@ fi
 # 打印 mirror 的 main 分支 commit，用来确认 git daemon 能读到仓库。
 git ls-remote "git://127.0.0.1/${REPO_NAME}" refs/heads/main
 
-# 把 demo-api Application 的 repoURL 临时改成本地 git mirror。
-kubectl -n argocd patch application demo-api --type merge -p "{\"spec\":{\"source\":{\"repoURL\":\"${LOCAL_REPO_URL}\"}}}"
-# 把 demo-api-canary Application 的 repoURL 临时改成本地 git mirror。
-kubectl -n argocd patch application demo-api-canary --type merge -p "{\"spec\":{\"source\":{\"repoURL\":\"${LOCAL_REPO_URL}\"}}}"
-# hard refresh demo-api，让 ArgoCD 立刻重新拉取 manifests。
-kubectl -n argocd annotate application demo-api argocd.argoproj.io/refresh=hard --overwrite
-# hard refresh demo-api-canary，让 ArgoCD 立刻重新拉取 manifests。
-kubectl -n argocd annotate application demo-api-canary argocd.argoproj.io/refresh=hard --overwrite
+# 这些是本地实验里需要从 Git mirror 拉取的 ArgoCD Application。
+# 如果某个 Application 还没有创建，下面循环会跳过它。
+APPLICATIONS=(
+  demo-api
+  demo-api-canary
+  user-service
+  order-api
+  order-api-canary
+)
 
-# 输出两个 Application 当前 repoURL、同步状态和健康状态：
+# 逐个把已存在的 Application repoURL 改成本地 git mirror，并触发 hard refresh。
+for app in "${APPLICATIONS[@]}"; do
+  # 只有 Application 已经存在时才 patch，避免第一次安装前脚本报错。
+  if kubectl -n argocd get application "$app" >/dev/null 2>&1; then
+    # 把 Application 的 repoURL 临时改成本地 git mirror。
+    kubectl -n argocd patch application "$app" --type merge -p "{\"spec\":{\"source\":{\"repoURL\":\"${LOCAL_REPO_URL}\"}}}"
+    # hard refresh，让 ArgoCD 立刻重新拉取 manifests。
+    kubectl -n argocd annotate application "$app" argocd.argoproj.io/refresh=hard --overwrite
+  fi
+done
+
+# 输出 Application 当前 repoURL、同步状态和健康状态：
 # 自定义输出列，方便快速确认 ArgoCD 是否使用了本地 mirror，以及是否 Synced。
-kubectl -n argocd get applications demo-api demo-api-canary \
+kubectl -n argocd get applications "${APPLICATIONS[@]}" --ignore-not-found \
   -o custom-columns=NAME:.metadata.name,REPO:.spec.source.repoURL,SYNC:.status.sync.status,HEALTH:.status.health.status

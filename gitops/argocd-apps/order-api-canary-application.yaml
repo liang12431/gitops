@@ -1,0 +1,22 @@
+# ArgoCD Application：部署 order-api 的 Flagger Canary CR。
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: order-api-canary
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/liang12431/gitops.git
+    targetRevision: HEAD
+    path: gitops/applications/order-api-canary
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+

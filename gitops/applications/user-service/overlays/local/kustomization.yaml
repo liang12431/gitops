@@ -1,0 +1,17 @@
+# user-service 本地 overlay。
+# ArgoCD 会读取这个目录并渲染最终 YAML。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: demo
+resources:
+  # 引用 user-service base。
+  - ../../base
+  # 暴露 user.local 的 Istio Gateway/VirtualService。
+  - virtualservice.yaml
+  # 声明外部服务 www.baidu.com，供 user/1 演示 egress。
+  - baidu-service-entry.yaml
+images:
+  # 确保 user-service 使用本地 0.1.0 镜像。
+  - name: localhost:5001/demo/user-service
+    newTag: 0.1.0
+

@@ -1,0 +1,19 @@
+# user-service 的 Kubernetes Service。
+apiVersion: v1
+kind: Service
+metadata:
+  # 集群内服务名：user-service.demo.svc.cluster.local。
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  selector:
+    # 指向 Deployment/user-service 创建的 Pod。
+    app: user-service
+  ports:
+    - name: http
+      # Service 端口。
+      port: 8080
+      # 转发到 Pod 中名为 http 的 containerPort，也就是 8080。
+      targetPort: http
+
