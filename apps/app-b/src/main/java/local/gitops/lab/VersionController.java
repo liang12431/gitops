@@ -15,8 +15,8 @@ public class VersionController {
     @GetMapping("/version")
     public Map<String, String> version() {
         return Map.of(
-                "app", "app-b",
-                "version", "v2",
+                "app", "app-c",
+                "version", "v3",
                 "time", Instant.now().toString());
     }
 }

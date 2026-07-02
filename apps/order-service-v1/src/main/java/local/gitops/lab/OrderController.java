@@ -18,7 +18,7 @@ public class OrderController {
     public Map<String, String> version() {
         return Map.of(
                 "service", "order-service",
-                "version", "v1",
+                "version", "v111",
                 "track", "primary",
                 "time", Instant.now().toString());
     }
@@ -27,7 +27,7 @@ public class OrderController {
     public Map<String, Object> orders(@PathVariable String userId) {
         return Map.of(
                 "service", "order-service",
-                "version", "v1",
+                "version", "v111",
                 "track", "primary",
                 "userId", userId,
                 "orders", List.of("primary-order-" + userId + "-001", "primary-order-" + userId + "-002"),
