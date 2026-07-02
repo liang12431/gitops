@@ -10,5 +10,5 @@ images:
   # base 里原始镜像是 order-service-v1。
   - name: localhost:5001/demo/order-service-v1
     # 现在把它替换成 order-service-v2，触发 Flagger 生成 order canary。
-    newName: localhost:5001/demo/order-service-v1
+    newName: localhost:5001/demo/order-service-v2
     newTag: 0.1.1
