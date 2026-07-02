@@ -47,3 +47,10 @@ spec:
         - /spec/selector
         # Flagger 可能把 targetPort 从命名端口 http 解析成数字 8080。
         - /spec/ports
+    - group: apps
+      kind: Deployment
+      name: demo-api
+      namespace: demo
+      jsonPointers:
+        # 允许 Flagger 在 promotion/rollback 后把 canary Deployment 副本数缩到 0，避免 ArgoCD 按 Git 里的 replicas: 1 改回去。
+        - /spec/replicas
