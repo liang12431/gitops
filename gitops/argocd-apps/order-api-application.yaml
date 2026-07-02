@@ -31,4 +31,10 @@ spec:
         - /spec/selector
         # Flagger 可能把 targetPort 从 http 解析为 8080。
         - /spec/ports
-
+    - group: apps
+      kind: Deployment
+      name: order-api
+      namespace: demo
+      jsonPointers:
+        # 允许 Flagger 或人工 scale 调整 canary Deployment 副本数，避免 ArgoCD 按 Git 里的 replicas: 1 改回去。
+        - /spec/replicas
